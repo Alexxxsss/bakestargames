@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>4-Player Chess (Cross Board)</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 20px;
+        background-color: #444; /* Darker background like image */
+        color: #eee;
+      }
+      #game-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      #status {
+        font-size: 1.2em;
+        font-weight: bold;
+        margin-bottom: 15px;
+        min-height: 2em;
+        text-align: center;
+      }
+      #board {
+        /* 14 rows/cols * 40px/cell = 560px */
+        width: 560px;
+        height: 560px;
+        border-collapse: collapse;
+        /* border: 2px solid #333; */ /* Removed outer border */
+      }
+      #board td {
+        width: 40px; /* Smaller cells for larger board */
+        height: 40px;
+        text-align: center;
+        font-size: 30px; /* Adjust piece size */
+        /* border: 1px solid #555; */ /* Thin border within board */
+        user-select: none;
+        position: relative;
+      }
+
+      /* Active Square Colors */
+      .light-square {
+        background-color: #e0e0e0;
+      } /* Lighter gray */
+      .dark-square {
+        background-color: #a0a0a0;
+      } /* Darker gray */
+
+      /* Inactive Square */
+      .inactive-square {
+        background-color: #444; /* Match body background */
+        cursor: default;
+      }
+
+      /* Add cursor only to active squares */
+      .active-square {
+        cursor: pointer;
+      }
+
+      /* Piece Colors - Updated to match image */
+      .piece.yellow {
+        color: #ffc300;
+        text-shadow: 1px 1px 2px black;
+      } /* Gold/Yellow */
+      .piece.blue {
+        color: #007bff;
+        text-shadow: 1px 1px 2px black;
+      } /* Bright Blue */
+      .piece.red {
+        color: #c70039;
+        text-shadow: 1px 1px 2px black;
+      } /* Darker Red */
+      .piece.green {
+        color: #28a745;
+        text-shadow: 1px 1px 2px black;
+      } /* Green */
+
+      /* Square Highlighting */
+      .selected {
+        background-color: #6495ed !important; /* Cornflower blue */
+        opacity: 0.8;
+      }
+      .valid-move::after {
+        /* Use ::after pseudo-element for circle */
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 15px; /* Circle size */
+        height: 15px;
+        background-color: rgba(0, 0, 0, 0.3); /* Dimmer circle */
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none; /* Don't interfere with clicks */
+      }
+      .valid-capture::after {
+        /* Use ::after for capture indication */
+        content: "";
+        position: absolute;
+        top: 5px; /* Position in corner */
+        left: 5px;
+        right: 5px;
+        bottom: 5px;
+        border: 3px solid rgba(0, 0, 0, 0.4); /* Hollow circle/square */
+        border-radius: 50%; /* Make it a circle */
+        /* border-radius: 0; */ /* Or keep as square frame */
+        pointer-events: none;
+      }
+      /* Make captured piece slightly transparent */
+      .valid-capture .piece {
+        opacity: 0.6;
+      }
+
+      #eliminated-players {
+        margin-top: 15px;
+        font-size: 0.9em;
+        color: #ccc;
+      }
+
+      #resetButton {
+        margin-top: 20px;
+        padding: 10px 20px;
+        font-size: 1em;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container">
+      <h1>4-Player Chess (Cross Board)</h1>
+      <div id="status">Yellow's Turn</div>
+      <div id="eliminated-players">Eliminated: None</div>
+      <table id="board"></table>
+      <button id="resetButton">Reset Game</button>
+    </div>
+
+    <script>
+      const boardElement = document.getElementById("board");
+      const statusElement = document.getElementById("status");
+      const eliminatedElement = document.getElementById("eliminated-players");
+      const resetButton = document.getElementById("resetButton");
+
+      // Board dimensions based on the cross shape (central 8x8 + 3 ranks/files on each side)
+      const ROWS = 14;
+      const COLS = 14;
+      const ARM_SIZE = 3; // Size of the extensions
+      const CENTER_START_ROW = ARM_SIZE;
+      const CENTER_END_ROW = ROWS - ARM_SIZE - 1; // = 10
+      const CENTER_START_COL = ARM_SIZE;
+      const CENTER_END_COL = COLS - ARM_SIZE - 1; // = 10
+
+      // Updated Player colors and order (Yellow starts)
+      const PLAYERS = [
+        {
+          id: "yellow",
+          name: "Yellow",
+          king: "♔",
+          queen: "♕",
+          rook: "♖",
+          bishop: "♗",
+          knight: "♘",
+          pawn: "♙",
+        },
+        {
+          id: "blue",
+          name: "Blue",
+          king: "♔",
+          queen: "♕",
+          rook: "♖",
+          bishop: "♗",
+          knight: "♘",
+          pawn: "♙",
+        }, // Use same symbols, different colors
+        {
+          id: "red",
+          name: "Red",
+          king: "♔",
+          queen: "♕",
+          rook: "♖",
+          bishop: "♗",
+          knight: "♘",
+          pawn: "♙",
+        },
+        {
+          id: "green",
+          name: "Green",
+          king: "♔",
+          queen: "♕",
+          rook: "♖",
+          bishop: "♗",
+          knight: "♘",
+          pawn: "♙",
+        },
+      ];
+
+      let boardState = []; // 2D array: boardState[row][col] = { type: 'pawn', color: 'yellow' } or null
+      let currentPlayerIndex = 0; // Yellow starts
+      let selectedSquare = null; // { row, col }
+      let validMoves = []; // Array of { row, col } for the selected piece
+      let activePlayers = [...PLAYERS]; // Players still in the game
+      let kings = {}; // Store king positions: { yellow: {row, col}, blue: {row, col}, ... }
+
+      // --- Helper Function ---
+      function isSquareActive(r, c) {
+        // Check if it's within the central 8x8 area
+        const inCenter =
+          r >= CENTER_START_ROW &&
+          r <= CENTER_END_ROW &&
+          c >= CENTER_START_COL &&
+          c <= CENTER_END_COL;
+        // Check if it's in the top arm (excluding center)
+        const inTopArm =
+          r >= ROWS - ARM_SIZE && c >= CENTER_START_COL && c <= CENTER_END_COL;
+        // Check if it's in the bottom arm (excluding center)
+        const inBottomArm =
+          r < ARM_SIZE && c >= CENTER_START_COL && c <= CENTER_END_COL;
+        // Check if it's in the left arm (excluding center)
+        const inLeftArm =
+          c < ARM_SIZE && r >= CENTER_START_ROW && r <= CENTER_END_ROW;
+        // Check if it's in the right arm (excluding center)
+        const inRightArm =
+          c >= COLS - ARM_SIZE && r >= CENTER_START_ROW && r <= CENTER_END_ROW;
+
+        return inCenter || inTopArm || inBottomArm || inLeftArm || inRightArm;
+      }
+
+      // --- Piece Definitions ---
+      function getPieceSymbol(piece) {
+        if (!piece) return "";
+        const player = PLAYERS.find((p) => p.id === piece.color);
+        // Could customize symbols per player here if needed
+        return player[piece.type];
+      }
+
+      function getPieceColorClass(piece) {
+        if (!piece) return "";
+        return `piece ${piece.color}`;
+      }
+
+      // --- Board Setup ---
+      function initializeBoard() {
+        boardState = Array(ROWS)
+          .fill(null)
+          .map(() => Array(COLS).fill(null));
+        kings = {};
+
+        // Place pieces for each player
+        // Player 1: Yellow (Top) - Ranks 13, 12, 11 (Indices 13, 12, 11) in Cols 3-10
+        const yellowBackRank = ROWS - 1; // 13
+        const yellowPawnRank = ROWS - 2; // 12
+        const yellowSetup = [
+          "rook",
+          "knight",
+          "bishop",
+          "queen",
+          "king",
+          "bishop",
+          "knight",
+          "rook",
+        ];
+        for (let c = CENTER_START_COL; c <= CENTER_END_COL; c++) {
+          const pieceType = yellowSetup[c - CENTER_START_COL];
+          boardState[yellowBackRank][c] = { type: pieceType, color: "yellow" };
+          if (pieceType === "king")
+            kings["yellow"] = { row: yellowBackRank, col: c };
+          boardState[yellowPawnRank][c] = { type: "pawn", color: "yellow" };
+        }
+
+        // Player 2: Blue (Left) - Cols 0, 1, 2 in Rows 3-10
+        const blueBackFile = 0;
+        const bluePawnFile = 1;
+        const blueSetup = [
+          "rook",
+          "knight",
+          "bishop",
+          "queen",
+          "king",
+          "bishop",
+          "knight",
+          "rook",
+        ]; // Order matters for King pos
+        for (let r = CENTER_START_ROW; r <= CENTER_END_ROW; r++) {
+          const pieceType = blueSetup[r - CENTER_START_ROW];
+          boardState[r][blueBackFile] = { type: pieceType, color: "blue" };
+          if (pieceType === "king")
+            kings["blue"] = { row: r, col: blueBackFile };
+          boardState[r][bluePawnFile] = { type: "pawn", color: "blue" };
+        }
+
+        // Player 3: Red (Bottom) - Ranks 0, 1, 2 in Cols 3-10
+        const redBackRank = 0;
+        const redPawnRank = 1;
+        const redSetup = [
+          "rook",
+          "knight",
+          "bishop",
+          "queen",
+          "king",
+          "bishop",
+          "knight",
+          "rook",
+        ];
+        for (let c = CENTER_START_COL; c <= CENTER_END_COL; c++) {
+          const pieceType = redSetup[c - CENTER_START_COL];
+          boardState[redBackRank][c] = { type: pieceType, color: "red" };
+          if (pieceType === "king") kings["red"] = { row: redBackRank, col: c };
+          boardState[redPawnRank][c] = { type: "pawn", color: "red" };
+        }
+
+        // Player 4: Green (Right) - Cols 13, 12, 11 (Indices 13, 12, 11) in Rows 3-10
+        const greenBackFile = COLS - 1; // 13
+        const greenPawnFile = COLS - 2; // 12
+        const greenSetup = [
+          "rook",
+          "knight",
+          "bishop",
+          "queen",
+          "king",
+          "bishop",
+          "knight",
+          "rook",
+        ];
+        for (let r = CENTER_START_ROW; r <= CENTER_END_ROW; r++) {
+          const pieceType = greenSetup[r - CENTER_START_ROW];
+          boardState[r][greenBackFile] = { type: pieceType, color: "green" };
+          if (pieceType === "king")
+            kings["green"] = { row: r, col: greenBackFile };
+          boardState[r][greenPawnFile] = { type: "pawn", color: "green" };
+        }
+
+        // --- Image shows King/Queen swapped relative to standard chess for Yellow/Red ---
+        // Let's adjust based on the image provided if the above setup is wrong:
+        // Image: R N B Q K B N R (for Yellow/Red from their view)
+        // Image: R N B K Q B N R (for Blue/Green from their view)
+        // Let's re-do Yellow/Red based on image exactly (assuming King is on 'e' file equivalent)
+
+        // Correcting Yellow (Top, index 13) Cols 3-10:
+        // 3=R, 4=N, 5=B, 6=Q, 7=K, 8=B, 9=N, 10=R
+        boardState[13][3] = { type: "rook", color: "yellow" };
+        boardState[13][4] = { type: "knight", color: "yellow" };
+        boardState[13][5] = { type: "bishop", color: "yellow" };
+        boardState[13][6] = { type: "queen", color: "yellow" };
+        boardState[13][7] = { type: "king", color: "yellow" };
+        kings["yellow"] = { row: 13, col: 7 };
+        boardState[13][8] = { type: "bishop", color: "yellow" };
+        boardState[13][9] = { type: "knight", color: "yellow" };
+        boardState[13][10] = { type: "rook", color: "yellow" };
+
+        // Correcting Red (Bottom, index 0) Cols 3-10:
+        // 3=R, 4=N, 5=B, 6=Q, 7=K, 8=B, 9=N, 10=R
+        boardState[0][3] = { type: "rook", color: "red" };
+        boardState[0][4] = { type: "knight", color: "red" };
+        boardState[0][5] = { type: "bishop", color: "red" };
+        boardState[0][6] = { type: "queen", color: "red" };
+        boardState[0][7] = { type: "king", color: "red" };
+        kings["red"] = { row: 0, col: 7 };
+        boardState[0][8] = { type: "bishop", color: "red" };
+        boardState[0][9] = { type: "knight", color: "red" };
+        boardState[0][10] = { type: "rook", color: "red" };
+
+        // Correcting Blue (Left, index 0) Rows 3-10:
+        // 3=R, 4=N, 5=B, 6=K, 7=Q, 8=B, 9=N, 10=R
+        boardState[3][0] = { type: "rook", color: "blue" };
+        boardState[4][0] = { type: "knight", color: "blue" };
+        boardState[5][0] = { type: "bishop", color: "blue" };
+        boardState[6][0] = { type: "king", color: "blue" };
+        kings["blue"] = { row: 6, col: 0 };
+        boardState[7][0] = { type: "queen", color: "blue" };
+        boardState[8][0] = { type: "bishop", color: "blue" };
+        boardState[9][0] = { type: "knight", color: "blue" };
+        boardState[10][0] = { type: "rook", color: "blue" };
+
+        // Correcting Green (Right, index 13) Rows 3-10:
+        // 3=R, 4=N, 5=B, 6=K, 7=Q, 8=B, 9=N, 10=R
+        boardState[3][13] = { type: "rook", color: "green" };
+        boardState[4][13] = { type: "knight", color: "green" };
+        boardState[5][13] = { type: "bishop", color: "green" };
+        boardState[6][13] = { type: "king", color: "green" };
+        kings["green"] = { row: 6, col: 13 };
+        boardState[7][13] = { type: "queen", color: "green" };
+        boardState[8][13] = { type: "bishop", color: "green" };
+        boardState[9][13] = { type: "knight", color: "green" };
+        boardState[10][13] = { type: "rook", color: "green" };
+
+        activePlayers = [...PLAYERS];
+        currentPlayerIndex = 0; // Yellow starts
+        selectedSquare = null;
+        validMoves = [];
+        updateStatus();
+        updateEliminatedDisplay();
+      }
+
+      // --- Rendering ---
+      function renderBoard() {
+        boardElement.innerHTML = ""; // Clear previous state
+
+        for (let r = 0; r < ROWS; r++) {
+          const rowElement = boardElement.insertRow();
+          for (let c = 0; c < COLS; c++) {
+            const cellElement = rowElement.insertCell();
+            cellElement.dataset.row = r;
+            cellElement.dataset.col = c;
+
+            if (isSquareActive(r, c)) {
+              cellElement.classList.add(
+                (r + c) % 2 === 0 ? "light-square" : "dark-square"
+              );
+              cellElement.classList.add("active-square"); // Mark as interactive
+
+              const piece = boardState[r][c];
+              if (piece) {
+                cellElement.innerHTML = getPieceSymbol(piece);
+                cellElement.className += ` ${getPieceColorClass(piece)}`;
+              }
+
+              // Add highlights based on game state
+              if (
+                selectedSquare &&
+                selectedSquare.row === r &&
+                selectedSquare.col === c
+              ) {
+                cellElement.classList.add("selected");
+              } else if (
+                validMoves.some((move) => move.row === r && move.col === c)
+              ) {
+                if (
+                  piece &&
+                  piece.color !== activePlayers[currentPlayerIndex].id
+                ) {
+                  // Check if it's an opponent's piece for capture highlight
+                  cellElement.classList.add("valid-capture");
+                } else {
+                  cellElement.classList.add("valid-move");
+                }
+              }
+
+              cellElement.addEventListener("click", onSquareClick);
+            } else {
+              // Style inactive squares (corners)
+              cellElement.classList.add("inactive-square");
+            }
+          }
+        }
+      }
+
+      // --- Game Logic ---
+
+      function onSquareClick(event) {
+        if (activePlayers.length <= 1) return; // Game over
+
+        const target = event.currentTarget;
+        // Ensure the clicked element is actually an active square (it should be if listener is attached)
+        if (!target.classList.contains("active-square")) return;
+
+        const row = parseInt(target.dataset.row);
+        const col = parseInt(target.dataset.col);
+        const clickedPiece = boardState[row][col];
+        const currentPlayer = activePlayers[currentPlayerIndex];
+
+        if (selectedSquare) {
+          // Attempting to move
+          const isValidTarget = validMoves.some(
+            (move) => move.row === row && move.col === col
+          );
+
+          if (isValidTarget) {
+            makeMove(selectedSquare.row, selectedSquare.col, row, col);
+            selectedSquare = null;
+            validMoves = [];
+            checkEndConditions(); // Check game state *before* switching turn
+            if (activePlayers.length > 1) {
+              switchTurn(); // Only switch if game not over
+            } else {
+              updateStatus(); // Update status to show winner
+              renderBoard(); // Re-render final board state
+            }
+          } else {
+            // Clicked invalid square or own piece - try selecting the new piece if it belongs to current player
+            selectedSquare = null; // Deselect previous
+            validMoves = [];
+            if (
+              clickedPiece &&
+              clickedPiece.color === currentPlayer.id &&
+              isSquareActive(row, col)
+            ) {
+              // Added isSquareActive check here too for safety
+              selectedSquare = { row, col };
+              validMoves = calculateValidMoves(row, col, clickedPiece);
+            }
+            renderBoard(); // Re-render to show selection change or deselection
+          }
+          // renderBoard called inside branches now
+        } else {
+          // No piece selected, try selecting
+          if (
+            clickedPiece &&
+            clickedPiece.color === currentPlayer.id &&
+            isSquareActive(row, col)
+          ) {
+            selectedSquare = { row, col };
+            validMoves = calculateValidMoves(row, col, clickedPiece);
+            renderBoard(); // Re-render to show selection and valid moves
+          }
+        }
+      }
+
+      function makeMove(fromRow, fromCol, toRow, toCol) {
+        const movingPiece = { ...boardState[fromRow][fromCol] };
+        const capturedPiece = boardState[toRow][toCol];
+
+        if (capturedPiece) {
+          if (capturedPiece.type === "king") {
+            eliminatePlayer(capturedPiece.color); // This should primarily handle checkmate capture
+          }
+        }
+
+        boardState[toRow][toCol] = movingPiece;
+        boardState[fromRow][fromCol] = null;
+
+        if (movingPiece.type === "king") {
+          kings[movingPiece.color] = { row: toRow, col: toCol };
+        }
+
+        handlePawnPromotion(toRow, toCol, movingPiece);
+        // We check end conditions *after* the move in onSquareClick, then switch turn
+      }
+
+      function handlePawnPromotion(row, col, piece) {
+        if (piece.type !== "pawn") return;
+
+        // Simplified Promotion: Reaching the absolute opposite back rank/file
+        const promotionZone =
+          (piece.color === "yellow" && row === 0) || // Yellow reaches Red's back rank
+          (piece.color === "blue" && col === COLS - 1) || // Blue reaches Green's back file
+          (piece.color === "red" && row === ROWS - 1) || // Red reaches Yellow's back rank
+          (piece.color === "green" && col === 0); // Green reaches Blue's back file
+
+        if (promotionZone) {
+          console.log(`Promoting ${piece.color} pawn at ${row}, ${col}`);
+          boardState[row][col] = { type: "queen", color: piece.color };
+          // Maybe add a visual confirmation later
+        }
+      }
+
+      function switchTurn() {
+        if (activePlayers.length === 0) return;
+        currentPlayerIndex = (currentPlayerIndex + 1) % activePlayers.length;
+        updateStatus();
+        renderBoard(); // Render board after turn switch and status update
+      }
+
+      function updateStatus() {
+        if (activePlayers.length > 1) {
+          const currentPlayer = activePlayers[currentPlayerIndex];
+          let statusText = `${currentPlayer.name}'s Turn`; // Removed color ID, using name
+          if (isKingInCheck(currentPlayer.id)) {
+            statusText += " - CHECK!";
+          }
+          statusElement.textContent = statusText;
+          statusElement.style.color =
+            currentPlayer.id === "yellow"
+              ? "#FFC300" // Use actual color values
+              : currentPlayer.id === "blue"
+              ? "#007bff"
+              : currentPlayer.id === "red"
+              ? "#C70039"
+              : currentPlayer.id === "green"
+              ? "#28A745"
+              : "#eee"; // Default color
+          statusElement.style.textShadow = "1px 1px 1px black"; // Consistent shadow
+        } else if (activePlayers.length === 1) {
+          const winner = activePlayers[0];
+          statusElement.textContent = `${winner.name} WINS!`;
+          statusElement.style.color =
+            winner.id === "yellow"
+              ? "#FFC300"
+              : winner.id === "blue"
+              ? "#007bff"
+              : winner.id === "red"
+              ? "#C70039"
+              : winner.id === "green"
+              ? "#28A745"
+              : "#eee";
+          statusElement.style.textShadow = "1px 1px 1px black";
+        } else {
+          statusElement.textContent = "Game Over - Draw?"; // Should be rare with elimination
+          statusElement.style.color = "#eee";
+          statusElement.style.textShadow = "none";
+        }
+      }
+
+      function updateEliminatedDisplay() {
+        const eliminatedNames = PLAYERS.filter(
+          (p) => !activePlayers.some((ap) => ap.id === p.id)
+        ).map((p) => p.name);
+        eliminatedElement.textContent =
+          "Eliminated: " +
+          (eliminatedNames.length > 0 ? eliminatedNames.join(", ") : "None");
+      }
+
+      // --- Move Validation ---
+
+      function calculateValidMoves(row, col, piece) {
+        const moves = [];
+        const color = piece.color;
+
+        // Helper: Add move if target is active, within bounds, not own piece, and doesn't cause self-check
+        const addMoveIfValid = (toRow, toCol) => {
+          if (
+            toRow >= 0 &&
+            toRow < ROWS &&
+            toCol >= 0 &&
+            toCol < COLS &&
+            isSquareActive(toRow, toCol)
+          ) {
+            // Added isSquareActive check
+            const targetPiece = boardState[toRow][toCol];
+            if (!targetPiece || targetPiece.color !== color) {
+              if (!moveResultsInCheck(row, col, toRow, toCol, color)) {
+                moves.push({ row: toRow, col: toCol });
+              }
+            }
+          }
+        };
+
+        switch (piece.type) {
+          case "pawn":
+            calculatePawnMoves(row, col, color, addMoveIfValid);
+            break;
+          case "rook":
+            calculateLineMoves(
+              row,
+              col,
+              color,
+              [
+                [0, 1],
+                [0, -1],
+                [1, 0],
+                [-1, 0],
+              ],
+              addMoveIfValid
+            );
+            break;
+          case "knight":
+            calculateKnightMoves(row, col, color, addMoveIfValid);
+            break;
+          case "bishop":
+            calculateLineMoves(
+              row,
+              col,
+              color,
+              [
+                [1, 1],
+                [1, -1],
+                [-1, 1],
+                [-1, -1],
+              ],
+              addMoveIfValid
+            );
+            break;
+          case "queen":
+            calculateLineMoves(
+              row,
+              col,
+              color,
+              [
+                [0, 1],
+                [0, -1],
+                [1, 0],
+                [-1, 0],
+                [1, 1],
+                [1, -1],
+                [-1, 1],
+                [-1, -1],
+              ],
+              addMoveIfValid
+            );
+            break;
+          case "king":
+            calculateKingMoves(row, col, color, addMoveIfValid);
+            break;
+        }
+
+        return moves;
+      }
+
+      function calculatePawnMoves(r, c, color, addMove) {
+        let directionRow = 0,
+          directionCol = 0;
+        let startRankOrFile = false; // Is the pawn on its starting position?
+
+        // Determine direction and starting position based on color
+        if (color === "yellow") {
+          directionRow = -1;
+          startRankOrFile = r === ROWS - 2;
+        } // Starts rank 12, moves negative row
+        else if (color === "blue") {
+          directionCol = 1;
+          startRankOrFile = c === 1;
+        } // Starts file 1, moves positive col
+        else if (color === "red") {
+          directionRow = 1;
+          startRankOrFile = r === 1;
+        } // Starts rank 1, moves positive row
+        else if (color === "green") {
+          directionCol = -1;
+          startRankOrFile = c === COLS - 2;
+        } // Starts file 12, moves negative col
+
+        // 1. Forward move (Check if next square is active and empty)
+        const nextR = r + directionRow;
+        const nextC = c + directionCol;
+        if (
+          nextR >= 0 &&
+          nextR < ROWS &&
+          nextC >= 0 &&
+          nextC < COLS &&
+          isSquareActive(nextR, nextC) &&
+          !boardState[nextR][nextC]
+        ) {
+          addMove(nextR, nextC);
+
+          // 2. Initial two-step move (Check if path is clear and active)
+          if (startRankOrFile) {
+            const doubleR = r + 2 * directionRow;
+            const doubleC = c + 2 * directionCol;
+            if (
+              doubleR >= 0 &&
+              doubleR < ROWS &&
+              doubleC >= 0 &&
+              doubleC < COLS &&
+              isSquareActive(doubleR, doubleC) &&
+              !boardState[doubleR][doubleC]
+            ) {
+              addMove(doubleR, doubleC);
+            }
+          }
+        }
+
+        // 3. Captures (Diagonal relative to movement - check if target is active and has opponent)
+        const captureOffsets =
+          color === "yellow" || color === "red"
+            ? [
+                [directionRow, 1],
+                [directionRow, -1],
+              ] // Sideways capture for N/S movers
+            : color === "blue" || color === "green"
+            ? [
+                [1, directionCol],
+                [-1, directionCol],
+              ]
+            : []; // Sideways capture for E/W movers
+
+        captureOffsets.forEach(([dr, dc]) => {
+          const captureR = r + dr;
+          const captureC = c + dc;
+          if (
+            captureR >= 0 &&
+            captureR < ROWS &&
+            captureC >= 0 &&
+            captureC < COLS &&
+            isSquareActive(captureR, captureC)
+          ) {
+            const targetPiece = boardState[captureR][captureC];
+            if (targetPiece && targetPiece.color !== color) {
+              addMove(captureR, captureC);
+            }
+          }
+        });
+        // En Passant is omitted
+      }
+
+      function calculateLineMoves(r, c, color, directions, addMove) {
+        directions.forEach(([dr, dc]) => {
+          for (let i = 1; ; i++) {
+            const nextR = r + i * dr;
+            const nextC = c + i * dc;
+
+            // Stop if off board OR onto an inactive square
+            if (
+              nextR < 0 ||
+              nextR >= ROWS ||
+              nextC < 0 ||
+              nextC >= COLS ||
+              !isSquareActive(nextR, nextC)
+            )
+              break;
+
+            const targetPiece = boardState[nextR][nextC];
+            if (targetPiece) {
+              if (targetPiece.color !== color) {
+                addMove(nextR, nextC); // Can capture
+              }
+              break; // Blocked by a piece (own or opponent)
+            } else {
+              addMove(nextR, nextC); // Empty active square
+            }
+          }
+        });
+      }
+
+      function calculateKnightMoves(r, c, color, addMove) {
+        const moves = [
+          [-2, -1],
+          [-2, 1],
+          [-1, -2],
+          [-1, 2],
+          [1, -2],
+          [1, 2],
+          [2, -1],
+          [2, 1],
+        ];
+        moves.forEach(([dr, dc]) => {
+          // No need for separate addMove function, just call the passed one
+          addMove(r + dr, c + dc);
+        });
+      }
+
+      function calculateKingMoves(r, c, color, addMove) {
+        const moves = [
+          [-1, -1],
+          [-1, 0],
+          [-1, 1],
+          [0, -1],
+          [0, 1],
+          [1, -1],
+          [1, 0],
+          [1, 1],
+        ];
+        moves.forEach(([dr, dc]) => {
+          addMove(r + dr, c + dc);
+        });
+        // Castling is omitted
+      }
+
+      // --- Check, Checkmate, Stalemate Logic (Largely unchanged, relies on correct move generation) ---
+
+      function isSquareAttacked(targetRow, targetCol, attackerColorToIgnore) {
+        if (!isSquareActive(targetRow, targetCol)) return false; // Cannot attack an inactive square
+
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            // Only check pieces on active squares
+            if (!isSquareActive(r, c)) continue;
+
+            const piece = boardState[r][c];
+            // Check if piece exists, belongs to an opponent, and is on an active square
+            if (piece && piece.color !== attackerColorToIgnore) {
+              const potentialAttacks = calculateAttackerMoves(r, c, piece);
+              if (
+                potentialAttacks.some(
+                  (move) => move.row === targetRow && move.col === targetCol
+                )
+              ) {
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      }
+
+      // Simplified move calculation for attack checking (no self-check constraint, respects active squares)
+      function calculateAttackerMoves(row, col, piece) {
+        const moves = [];
+        const color = piece.color; // Attacker's color
+
+        // Add potential attack if target square is active
+        const addPotentialAttack = (toRow, toCol) => {
+          if (
+            toRow >= 0 &&
+            toRow < ROWS &&
+            toCol >= 0 &&
+            toCol < COLS &&
+            isSquareActive(toRow, toCol)
+          ) {
+            moves.push({ row: toRow, col: toCol });
+          }
+        };
+
+        // Generate potential squares they *could* attack (simplified versions)
+        switch (piece.type) {
+          case "pawn":
+            let directionRow = 0,
+              directionCol = 0;
+            if (color === "yellow") {
+              directionRow = -1;
+            } else if (color === "blue") {
+              directionCol = 1;
+            } else if (color === "red") {
+              directionRow = 1;
+            } else if (color === "green") {
+              directionCol = -1;
+            }
+
+            const captureOffsets =
+              color === "yellow" || color === "red"
+                ? [
+                    [directionRow, 1],
+                    [directionRow, -1],
+                  ]
+                : [
+                    [1, directionCol],
+                    [-1, directionCol],
+                  ];
+            captureOffsets.forEach(([dr, dc]) =>
+              addPotentialAttack(row + dr, col + dc)
+            );
+            break;
+          case "rook":
+            calculateLineMoves(
+              row,
+              col,
+              color,
+              [
+                [0, 1],
+                [0, -1],
+                [1, 0],
+                [-1, 0],
+              ],
+              addPotentialAttack,
+              true
+            ); // Pass flag to ignore target piece color
+            break;
+          case "knight":
+            calculateKnightMoves(row, col, color, addPotentialAttack, true);
+            break;
+          case "bishop":
+            calculateLineMoves(
+              row,
+              col,
+              color,
+              [
+                [1, 1],
+                [1, -1],
+                [-1, 1],
+                [-1, -1],
+              ],
+              addPotentialAttack,
+              true
+            );
+            break;
+          case "queen":
+            calculateLineMoves(
+              row,
+              col,
+              color,
+              [
+                [0, 1],
+                [0, -1],
+                [1, 0],
+                [-1, 0],
+                [1, 1],
+                [1, -1],
+                [-1, 1],
+                [-1, -1],
+              ],
+              addPotentialAttack,
+              true
+            );
+            break;
+          case "king":
+            calculateKingMoves(row, col, color, addPotentialAttack, true);
+            break;
+        }
+
+        // Need to refine Line/Knight/King moves for attacker check: they don't need the 'addMove' logic which checks target piece color/self-check
+        // Rewriting the attacker move helpers slightly:
+
+        const addLineAttacks = (r, c, directions) => {
+          directions.forEach(([dr, dc]) => {
+            for (let i = 1; ; i++) {
+              const nextR = r + i * dr;
+              const nextC = c + i * dc;
+              if (
+                nextR < 0 ||
+                nextR >= ROWS ||
+                nextC < 0 ||
+                nextC >= COLS ||
+                !isSquareActive(nextR, nextC)
+              )
+                break;
+              addPotentialAttack(nextR, nextC); // Add the square regardless of what's on it
+              if (boardState[nextR][nextC]) break; // Stop after hitting any piece
+            }
+          });
+        };
+        const addKnightAttacks = (r, c) => {
+          const knightDeltas = [
+            [-2, -1],
+            [-2, 1],
+            [-1, -2],
+            [-1, 2],
+            [1, -2],
+            [1, 2],
+            [2, -1],
+            [2, 1],
+          ];
+          knightDeltas.forEach(([dr, dc]) =>
+            addPotentialAttack(r + dr, c + dc)
+          );
+        };
+        const addKingAttacks = (r, c) => {
+          const kingDeltas = [
+            [-1, -1],
+            [-1, 0],
+            [-1, 1],
+            [0, -1],
+            [0, 1],
+            [1, -1],
+            [1, 0],
+            [1, 1],
+          ];
+          kingDeltas.forEach(([dr, dc]) => addPotentialAttack(r + dr, c + dc));
+        };
+
+        // Use the refined helpers
+        switch (piece.type) {
+          case "pawn": // Pawn attack logic was already correct for this purpose
+            let pdR = 0,
+              pdC = 0;
+            if (color === "yellow") pdR = -1;
+            else if (color === "blue") pdC = 1;
+            else if (color === "red") pdR = 1;
+            else if (color === "green") pdC = -1;
+            const pOffsets =
+              color === "yellow" || color === "red"
+                ? [
+                    [pdR, 1],
+                    [pdR, -1],
+                  ]
+                : [
+                    [1, pdC],
+                    [-1, pdC],
+                  ];
+            pOffsets.forEach(([dr, dc]) =>
+              addPotentialAttack(row + dr, col + dc)
+            );
+            break;
+          case "rook":
+            addLineAttacks(row, col, [
+              [0, 1],
+              [0, -1],
+              [1, 0],
+              [-1, 0],
+            ]);
+            break;
+          case "knight":
+            addKnightAttacks(row, col);
+            break;
+          case "bishop":
+            addLineAttacks(row, col, [
+              [1, 1],
+              [1, -1],
+              [-1, 1],
+              [-1, -1],
+            ]);
+            break;
+          case "queen":
+            addLineAttacks(row, col, [
+              [0, 1],
+              [0, -1],
+              [1, 0],
+              [-1, 0],
+              [1, 1],
+              [1, -1],
+              [-1, 1],
+              [-1, -1],
+            ]);
+            break;
+          case "king":
+            addKingAttacks(row, col);
+            break;
+        }
+
+        return moves;
+      }
+
+      function isKingInCheck(kingColor) {
+        const kingPos = kings[kingColor];
+        if (!kingPos || !isSquareActive(kingPos.row, kingPos.col)) return false; // King eliminated or somehow off board
+        return isSquareAttacked(kingPos.row, kingPos.col, kingColor);
+      }
+
+      function moveResultsInCheck(fromRow, fromCol, toRow, toCol, playerColor) {
+        const pieceToMove = boardState[fromRow][fromCol];
+        const targetContent = boardState[toRow][toCol]; // Could be an opponent piece or null
+        let kingPos = kings[playerColor]; // Get current king position
+
+        // Temporarily make the move
+        boardState[toRow][toCol] = pieceToMove;
+        boardState[fromRow][fromCol] = null;
+
+        let originalKingPos = null; // Store original pos if king moves
+        if (pieceToMove.type === "king") {
+          originalKingPos = { ...kingPos }; // Deep copy needed? No, just store values.
+          kings[playerColor] = { row: toRow, col: toCol }; // Temporarily update global king position
+          kingPos = kings[playerColor]; // Use the new temporary position for the check
+        }
+
+        // Check if the king is now attacked AT ITS CURRENT POSITION (kingPos)
+        const isInCheck = isSquareAttacked(
+          kingPos.row,
+          kingPos.col,
+          playerColor
+        );
+
+        // Undo the move
+        boardState[fromRow][fromCol] = pieceToMove;
+        boardState[toRow][toCol] = targetContent; // Restore captured piece or null
+        if (originalKingPos) {
+          kings[playerColor] = originalKingPos; // Restore original king position if it moved
+        }
+
+        return isInCheck;
+      }
+
+      function checkEndConditions() {
+        const currentPlayer = activePlayers[currentPlayerIndex]; // Player whose turn just ended
+        let someoneEliminated = false;
+
+        // Important: Check opponents *before* switching turn
+        const opponents = activePlayers.filter(
+          (p) => p.id !== currentPlayer.id
+        );
+
+        opponents.forEach((opponent) => {
+          if (!kings[opponent.id]) return; // Already eliminated
+
+          const opponentKingInCheck = isKingInCheck(opponent.id);
+          const opponentHasLegalMoves = canPlayerMove(opponent.id);
+
+          if (opponentKingInCheck && !opponentHasLegalMoves) {
+            console.log(
+              `${opponent.name} (${opponent.id}) is CHECKMATED by ${currentPlayer.name}`
+            );
+            eliminatePlayer(opponent.id);
+            someoneEliminated = true;
+          } else if (!opponentKingInCheck && !opponentHasLegalMoves) {
+            console.log(`${opponent.name} (${opponent.id}) is STALEMATED`);
+            eliminatePlayer(opponent.id);
+            someoneEliminated = true;
+          }
+        });
+
+        // Check the player whose turn it currently IS (after opponents have been checked/eliminated)
+        // This catches self-stalemate or if the current player was checkmated by a previous move they couldn't avoid
+        if (activePlayers.some((p) => p.id === currentPlayer.id)) {
+          // Check if current player wasn't just eliminated
+          const currentKingInCheck = isKingInCheck(currentPlayer.id);
+          const currentHasLegalMoves = canPlayerMove(currentPlayer.id);
+
+          if (currentKingInCheck && !currentHasLegalMoves) {
+            console.log(
+              `${currentPlayer.name} (${currentPlayer.id}) is CHECKMATED (likely by a previous player)`
+            );
+            eliminatePlayer(currentPlayer.id);
+            someoneEliminated = true;
+          } else if (!currentKingInCheck && !currentHasLegalMoves) {
+            console.log(
+              `${currentPlayer.name} (${currentPlayer.id}) is STALEMATED`
+            );
+            eliminatePlayer(currentPlayer.id);
+            someoneEliminated = true;
+          }
+        }
+
+        // If eliminations happened, update display immediately
+        if (someoneEliminated) {
+          updateEliminatedDisplay();
+          // No need to re-render board here, it happens after switchTurn or if game ends
+        }
+
+        // Check if the game has ended after potential eliminations
+        if (activePlayers.length <= 1) {
+          // updateStatus will handle winner declaration
+          // renderBoard will be called by the caller (onSquareClick or switchTurn)
+          return true; // Indicate game ended
+        }
+        return false; // Game continues
+      }
+
+      function canPlayerMove(playerColor) {
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            if (!isSquareActive(r, c)) continue; // Skip inactive squares
+
+            const piece = boardState[r][c];
+            if (piece && piece.color === playerColor) {
+              const moves = calculateValidMoves(r, c, piece);
+              if (moves.length > 0) {
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      }
+
+      function eliminatePlayer(playerColor) {
+        console.log(`Eliminating ${playerColor}`);
+        const playerIndexOriginal = activePlayers.findIndex(
+          (p) => p.id === playerColor
+        ); // Index in current active list
+
+        if (playerIndexOriginal === -1) {
+          console.warn(`Tried to eliminate ${playerColor} who is not active.`);
+          return;
+        }
+
+        // Store the ID of the player whose turn it currently is *before* modifying activePlayers
+        const playerWhoseTurnItIsId = activePlayers[currentPlayerIndex].id;
+
+        // Remove player from active list
+        activePlayers = activePlayers.filter((p) => p.id !== playerColor);
+
+        // Remove player's pieces
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            if (boardState[r][c] && boardState[r][c].color === playerColor) {
+              boardState[r][c] = null;
+            }
+          }
+        }
+        delete kings[playerColor];
+
+        // Find the new index of the player whose turn it *was*
+        const newCurrentPlayerIndex = activePlayers.findIndex(
+          (p) => p.id === playerWhoseTurnItIsId
+        );
+
+        if (newCurrentPlayerIndex !== -1) {
+          // If the player whose turn it was is still active, set the index to them.
+          // The turn switching logic will then advance from this point.
+          currentPlayerIndex = newCurrentPlayerIndex;
+        } else {
+          // If the player whose turn it was got eliminated, the turn should pass to the *next* player
+          // relative to the eliminated player's original position.
+          // We need to adjust the index based on the eliminated player's original index.
+          if (activePlayers.length > 0) {
+            // The turn effectively stays with the player *at* the eliminated player's old index slot,
+            // because the array shifted. But we must wrap around.
+            currentPlayerIndex = playerIndexOriginal % activePlayers.length;
+          } else {
+            currentPlayerIndex = 0; // No players left active
+          }
+        }
+
+        // Ensure index is valid after potential modifications
+        if (
+          activePlayers.length > 0 &&
+          currentPlayerIndex >= activePlayers.length
+        ) {
+          currentPlayerIndex = 0;
+        }
+
+        console.log(
+          `Elimination complete. Next player index (tentative): ${currentPlayerIndex}`
+        );
+        updateEliminatedDisplay(); // Update display now
+        // The calling function (checkEndConditions -> onSquareClick/switchTurn) will handle the next steps
+      }
+
+      // --- Initialization ---
+      resetButton.addEventListener("click", () => {
+        initializeBoard();
+        renderBoard();
+      });
+
+      // Initial setup
+      initializeBoard();
+      renderBoard();
+    </script>
+  </body>
+</html>
