@@ -1,46 +1,140 @@
-<!-- Start of Game Embed Code -->
-<style>
-  /* Container to maintain the 9:16 aspect ratio */
-  .game-embed-container-9x16 {
-    position: relative; /* Needed for absolute positioning of the iframe inside */
-    width: 100%; /* Makes the container responsive to its parent's width */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Web Game Showcase</title>
+    <style>
+        /* Global Resets and Base Styles */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden; /* Prevent horizontal scrollbar if any minor overflow */
+        }
 
-    /* --- ADJUST THIS VALUE to control the max game size --- */
-    max-width: 360px;
-    /* Examples: 360px wide is common for mobile portrait views.
-                 405px wide would make the height 720px. */
+        /* Cool Background Design */
+        body {
+            background-color: #0f0f1a; /* Dark base color */
+            background-image:
+                /* Subtle diagonal lines pattern */
+                repeating-linear-gradient(
+                    45deg,
+                    rgba(255, 255, 255, 0.02),
+                    rgba(255, 255, 255, 0.02) 1px,
+                    transparent 1px,
+                    transparent 20px
+                ),
+                /* Main radial gradient for depth and focus */
+                radial-gradient(ellipse at center, #2a2a3a 0%, #0f0f1a 70%);
+            background-attachment: fixed; /* Keeps background static during scroll */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh; /* Ensure it takes at least full viewport height */
+            padding: 20px;
+            box-sizing: border-box;
+            color: #e0e0e0; /* Light text color for contrast */
+        }
 
-    margin: 20px auto; /* Adds some space above/below and centers the container */
-    overflow: hidden; /* Ensures nothing spills out */
+        /* Wrapper for content (title + game) */
+        .showcase-wrapper {
+            text-align: center;
+            max-width: 90%; /* Ensure it doesn't get too wide on very large screens */
+        }
 
-    /* Aspect Ratio Padding Trick: (height / width) * 100% */
-    /* For 9:16 ratio -> (16 / 9) * 100% = 177.78% */
-    padding-top: 177.78%;
+        /* Title Styling */
+        .game-title {
+            font-size: clamp(2rem, 5vw, 3.5rem); /* Responsive font size */
+            margin-bottom: 30px;
+            color: #ffffff;
+            text-shadow:
+                0 0 5px rgba(0, 191, 255, 0.7),  /* Light blue glow */
+                0 0 10px rgba(0, 191, 255, 0.5),
+                0 0 15px rgba(0, 191, 255, 0.3);
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
 
-    background-color: #f0f0f0; /* Optional: Placeholder color while loading */
-    border: 1px solid #ccc; /* Optional: A light border around the embed */
-  }
+        /* Game Container for 9:16 Aspect Ratio */
+        .game-container-9-16 {
+            position: relative;
+            width: 90vw; /* Responsive width based on viewport width */
+            max-width: 360px; /* Max physical width (e.g., iPhone 12 Pro is 390px wide, 360px is a good target) */
+                               /* 360px width * (16/9) aspect ratio = 640px height */
+            margin: 0 auto 20px auto; /* Center it and add some space below */
+            /* Aspect ratio padding hack: (height / width) * 100% = (16 / 9) * 100% = 177.78% */
+            padding-top: 177.78%;
+            background-color: #000; /* Fallback/loading background for iframe area */
+            border-radius: 15px; /* Rounded corners for the game frame */
+            overflow: hidden; /* Important: clips the iframe to the rounded corners */
+            box-shadow:
+                0 10px 30px rgba(0, 0, 0, 0.5), /* Main shadow for depth */
+                0 0 0 3px rgba(0, 191, 255, 0.3), /* Inner glow/border accent */
+                inset 0 0 10px rgba(0,0,0,0.3); /* Inner shadow for subtle depth on the frame */
+            transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+        }
 
-  /* Styling for the iframe itself */
-  .game-embed-container-9x16 iframe {
-    position: absolute; /* Positioned relative to the container */
-    top: 0;
-    left: 0;
-    width: 100%; /* Fills the container width */
-    height: 100%; /* Fills the container height */
-    border: none; /* Removes the default iframe border */
-  }
-</style>
+        .game-container-9-16:hover {
+            transform: translateY(-5px) scale(1.02); /* Slight lift on hover */
+            box-shadow:
+                0 15px 40px rgba(0, 0, 0, 0.6),
+                0 0 0 4px rgba(0, 191, 255, 0.5),
+                inset 0 0 15px rgba(0,0,0,0.4);
+        }
 
-<div class="game-embed-container-9x16">
-  <iframe
-    src="https://bakestargames.vercel.app/bswebbgame.html" 
-    title="Bake Star Game" 
-    allowfullscreen 
-  >
-    <!-- Fallback content for browsers that don't support iframes -->
+        .game-container-9-16 iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 0; /* Remove default iframe border */
+        }
 
-    <a href="https://bakestargames.vercel.app/bswebbgame.html" target="_blank">here</a>.
-  </iframe>
-</div>
-<!-- End of Game Embed Code -->
+        /* Optional: Some text below the game */
+        .description {
+            font-size: 0.9rem;
+            color: #a0a0b0;
+            max-width: 500px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* For very small screens, reduce title margin */
+        @media (max-width: 400px) {
+            .game-title {
+                margin-bottom: 20px;
+                font-size: 1.8rem;
+            }
+            .game-container-9-16 {
+                max-width: 300px; /* Adjust if needed for very small devices */
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="showcase-wrapper">
+        <h1 class="game-title">My Awesome Web Game</h1>
+
+        <div class="game-container-9-16">
+            <iframe
+                src="https://idyllic-tapioca-2545fd.netlify.app/"
+                allowfullscreen
+                title="My Web Game (9:16)">
+                Your browser does not support iframes. Please visit the game directly.
+            </iframe>
+        </div>
+
+        <p class="description">
+            Experience this cool game embedded right here! It's designed for a portrait view.
+            Feel free to go fullscreen for the best experience.
+        </p>
+    </div>
+
+</body>
+</html>
