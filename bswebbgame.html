@@ -1,17 +1,37 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Document</title>
-</head>
-<body>
-  <div style=" overflow:hidden;">
-  <iframe 
-    src="https://682271a84d40d0196654b8fe--idyllic-tapioca-2545fd.netlify.app/" 
-    style="width:1920px; height:1080px; border:none; transform: scale(0.5); transform-origin: top left;">
+<!-- Start of Game Embed Code -->
+<style>
+  .game-embed-container-9x16 {
+    position: relative; /* Establishes positioning context for the iframe */
+    width: 100%; /* Takes full width of its parent container */
+    max-width: 360px; /* << ADJUST THIS VALUE to control the max size */
+                     /* A common width for mobile portrait view */
+    margin: 20px auto; /* Adds some space above/below and centers the container */
+    overflow: hidden; /* Ensures content outside the container is clipped */
+    /* Aspect Ratio Calculation: (height / width) * 100% */
+    /* For 9:16 -> (16 / 9) * 100% = 177.78% */
+    padding-top: 177.78%;
+    background-color: #f0f0f0; /* Optional: background while iframe loads */
+  }
+
+  .game-embed-container-9x16 iframe {
+    position: absolute; /* Positions the iframe relative to the container */
+    top: 0;
+    left: 0;
+    width: 100%; /* Makes iframe fill the container width */
+    height: 100%; /* Makes iframe fill the container height */
+    border: none; /* Removes the default iframe border */
+  }
+</style>
+
+<div class="game-embed-container-9x16">
+  <iframe
+    src="https://682271a84d40d0196654b8fe--idyllic-tapioca-2545fd.netlify.app/"
+    title="My Web Game" /* << CHANGE THIS to your actual game title for accessibility */
+    allowfullscreen /* Allows the game to go fullscreen if it supports it */
+  >
+    Your browser does not support iframes.
+    You can view the game directly
+    <a href="https://682271a84d40d0196654b8fe--idyllic-tapioca-2545fd.netlify.app/" target="_blank">here</a>.
   </iframe>
 </div>
-
-</body>
-</html>
+<!-- End of Game Embed Code -->
