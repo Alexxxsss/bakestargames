@@ -1,37 +1,48 @@
 <!-- Start of Game Embed Code -->
 <style>
+  /* Container to maintain the 9:16 aspect ratio */
   .game-embed-container-9x16 {
-    position: relative; /* Establishes positioning context for the iframe */
-    width: 100%; /* Takes full width of its parent container */
-    max-width: 360px; /* << ADJUST THIS VALUE to control the max size */
-                     /* A common width for mobile portrait view */
+    position: relative; /* Needed for absolute positioning of the iframe inside */
+    width: 100%; /* Makes the container responsive to its parent's width */
+
+    /* --- ADJUST THIS VALUE to control the max game size --- */
+    max-width: 360px;
+    /* Examples: 360px wide is common for mobile portrait views.
+                 405px wide would make the height 720px. */
+
     margin: 20px auto; /* Adds some space above/below and centers the container */
-    overflow: hidden; /* Ensures content outside the container is clipped */
-    /* Aspect Ratio Calculation: (height / width) * 100% */
-    /* For 9:16 -> (16 / 9) * 100% = 177.78% */
+    overflow: hidden; /* Ensures nothing spills out */
+
+    /* Aspect Ratio Padding Trick: (height / width) * 100% */
+    /* For 9:16 ratio -> (16 / 9) * 100% = 177.78% */
     padding-top: 177.78%;
-    background-color: #f0f0f0; /* Optional: background while iframe loads */
+
+    background-color: #f0f0f0; /* Optional: Placeholder color while loading */
+    border: 1px solid #ccc; /* Optional: A light border around the embed */
   }
 
+  /* Styling for the iframe itself */
   .game-embed-container-9x16 iframe {
-    position: absolute; /* Positions the iframe relative to the container */
+    position: absolute; /* Positioned relative to the container */
     top: 0;
     left: 0;
-    width: 100%; /* Makes iframe fill the container width */
-    height: 100%; /* Makes iframe fill the container height */
+    width: 100%; /* Fills the container width */
+    height: 100%; /* Fills the container height */
     border: none; /* Removes the default iframe border */
   }
 </style>
 
 <div class="game-embed-container-9x16">
   <iframe
-    src="https://682271a84d40d0196654b8fe--idyllic-tapioca-2545fd.netlify.app/"
-    title="My Web Game" /* << CHANGE THIS to your actual game title for accessibility */
-    allowfullscreen /* Allows the game to go fullscreen if it supports it */
+    src="https://bakestargames.vercel.app/bswebbgame.html" /* << CORRECTED URL */
+    title="Bake Star Game" /* << CHANGE to your game's actual name */
+    allowfullscreen /* Allows the game's fullscreen button to work */
   >
+    <!-- Fallback content for browsers that don't support iframes -->
     Your browser does not support iframes.
-    You can view the game directly
-    <a href="https://682271a84d40d0196654b8fe--idyllic-tapioca-2545fd.netlify.app/" target="_blank">here</a>.
+    You can play the game directly
+    <a href="https://bakestargames.vercel.app/bswebbgame.html" target="_blank">here</a>.
+     /* << CORRECTED FALLBACK URL */
   </iframe>
 </div>
 <!-- End of Game Embed Code -->
